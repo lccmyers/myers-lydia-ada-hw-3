@@ -1,0 +1,263 @@
+---
+title: "ADA HW 3"
+author: "Lydia Myers"
+date: "4/17/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+## Challenge 1
+
+Loading in packages and data:
+
+```{r}
+library(tidyverse)
+library(broom)
+library(infer)
+
+d<-read_csv("https://raw.githubusercontent.com/difiore/ada-2021-datasets/main/KamilarAndCooperData.csv", col_names=T)
+head(d)
+d<-na.omit(d)
+```
+
+Creating linear models for both logged and original data:
+
+```{r}
+d$log_Brain_Size_Species_Mean<-log(d$Brain_Size_Species_Mean)
+d$log_WeaningAge_d<-log(d$WeaningAge_d)
+
+r<-lm(WeaningAge_d ~ Brain_Size_Species_Mean, data=d)
+logr<-lm(log_WeaningAge_d ~ log_Brain_Size_Species_Mean, data=d)
+
+```
+
+Scatterplots with regression lines and model listed on the plot:
+
+```{r}
+ggplot(d, aes(x=Brain_Size_Species_Mean, y=WeaningAge_d))+geom_point()+
+  geom_smooth(method="lm",formula=y~x, se=F, color="red")+
+  annotate(geom="text",x=200,y=1500,label="Weaning age ~ Brain size",color="black",fontface=2)+
+  labs(y= "Weaining Age in Days", x = "Brain  Size")
+
+ggplot(d, aes(x=log(Brain_Size_Species_Mean), y=log(WeaningAge_d)))+geom_point()+
+  geom_smooth(method="lm",formula=y~x, se=F, color="red")+
+  annotate(geom="text",x=3,y=7,label="Log Weaning age ~ Log Brain size",color="black",fontface=2)+
+  labs(y= "Log Weaining Age in Days", x = "Log Brain  Size")
+```
+
+Evaluating point estimate of the slope, testing hypotheses & listing confidence intervals:
+
+```{r}
+summary(r)
+summary(logr)
+
+confint(r,'Brain_Size_Species_Mean',level=0.90)
+confint(logr,"log_Brain_Size_Species_Mean",level=0.90)
+
+```
+
+For both models, the value of B1 is statistically significantly different from zero, which
+does not support the null hypothesis that B1=0.
+
+Plotting the 90% confidence and prediction intervals for the models:
+
+```{r}
+Brain_Size_Species_Mean<-d$Brain_Size_Species_Mean
+df <- augment(r, se_fit = TRUE)
+alpha<-0.05
+
+#creating confidence intervals
+ci <- predict(r, newdata = data.frame(brain_size = d$Brain_Size_Species_Mean),
+  interval = "confidence", level = .9) 
+ci <- data.frame(ci)
+ci<-na.omit(ci)
+ci <- cbind(df$Brain_Size_Species_Mean, ci)
+names(ci) <- c("brain_size", "c.fit", "c.lwr", "c.upr")
+
+#creating prediction intervals
+pi <- predict(r, newdata = data.frame(brain_size = d$Brain_Size_Species_Mean),
+              interval = "prediction", level = .9) 
+pi <- data.frame(pi)
+pi<-na.omit(pi)
+pi <- cbind(df$Brain_Size_Species_Mean, pi)
+names(pi) <- c("brain_size", "p.fit", "p.lwr", "p.upr")
+
+#plotting
+ggplot(data = df, aes(x = Brain_Size_Species_Mean, y = WeaningAge_d))+
+  geom_point() + geom_line(data=ci, aes(x=Brain_Size_Species_Mean, y=c.fit))+
+  geom_line(data=ci, aes(x=Brain_Size_Species_Mean, y=c.lwr, color="blue"))+
+  geom_line(data=ci, aes(x=Brain_Size_Species_Mean, y=c.upr, color="red"))+
+  geom_line(data = pi, aes(x = brain_size, y = p.lwr, color="darkblue"))+
+  geom_line(data = pi, aes(x = brain_size, y = p.upr, color = "darkred"))+
+  scale_color_discrete(name = "Confidence & Prediction Intervals",
+  labels = c("Lower CI", "Lower PI", "Upper PI", "Upper CI"))+
+  labs(y= "Weaning Age in Days", x = "Brain  Size")
+  
+#doing the same for tthe logged stuff
+log_Brain_Size_Species_Mean<-log(d$Brain_Size_Species_Mean)
+df <- augment(logr, se_fit = TRUE)
+
+#creating confidence intervals
+ci <- predict(logr, newdata = data.frame(log_brain_size = log(d$Brain_Size_Species_Mean)),
+              interval = "confidence", level = .9) 
+ci <- data.frame(ci)
+ci<-na.omit(ci)
+ci <- cbind(df$log_Brain_Size_Species_Mean, ci)
+names(ci) <- c("log_brain_size", "c.fit", "c.lwr", "c.upr")
+  
+#creating prediction intervals
+pi <- predict(logr, newdata = data.frame(log_brain_size = log(d$Brain_Size_Species_Mean)),
+              interval = "prediction", level = .9) 
+pi <- data.frame(pi)
+pi<-na.omit(pi)
+pi <- cbind(df$log_Brain_Size_Species_Mean, pi)
+names(pi) <- c("log_brain_size", "p.fit", "p.lwr", "p.upr")
+  
+#plotting
+ggplot(data = df, aes(x = log_Brain_Size_Species_Mean, y = log_WeaningAge_d))+
+  geom_point() + geom_line(data=ci, aes(x=log_Brain_Size_Species_Mean, y=c.fit))+
+  geom_line(data=ci, aes(x=log_Brain_Size_Species_Mean, y=c.lwr, color="blue"))+
+  geom_line(data=ci, aes(x=log_Brain_Size_Species_Mean, y=c.upr, color="red"))+
+  geom_line(data = pi, aes(x = log_brain_size, y = p.lwr, color="darkblue"))+
+  geom_line(data = pi, aes(x = log_brain_size, y = p.upr, color = "darkred"))+
+  scale_color_discrete(name = "Confidence & Prediction Intervals",
+  labels = c("Lower CI", "Lower PI", "Upper PI", "Upper CI"))+
+  labs(y= "Log Weaning Age in Days", x = "Log Brain  Size")  
+
+```
+
+Finding point estimate & associated 90% confidence intervals for weaning age for species whose brain
+is 750 gm.
+
+```{r}
+
+predict(r,newdata = data.frame(Brain_Size_Species_Mean = 750),interval = "prediction", level = 0.90)
+```  
+
+I do not trust the model to provide an accurate prediction for a brain of 750 gm, as this size is
+much larger than the data the model used to create the prediction.
+
+I believe the logged model is more accurate, because the data fits the regression line better.
+
+
+## Challenge 2
+
+Running a regression on mean group size and body mass, and listing the coefficients:
+```{r}
+d$log_MeanGroupSize<-log(d$MeanGroupSize)
+d$log_Body_mass_female_mean<-log(d$Body_mass_female_mean)
+
+r<-lm(log_MeanGroupSize~log_Body_mass_female_mean, data=d)
+r$coefficients
+```
+
+Generating a bootstrap sampling distribution for each beta coefficient:
+
+```{r}
+#bootstrap coefficients
+set.seed(1)
+bootVals<-data.frame(boot_slope = 1:1000, boot_intercept = 1:1000)
+
+for (i in 1:1000){
+  s<-sample_n(d, size=nrow(d), replace=T)
+  bootr<-lm(log_MeanGroupSize~log_Body_mass_female_mean, data=s)
+  vals<-bootr$coefficients
+  bootVals$boot_slope[[i]]<-vals[1]
+  bootVals$boot_intercept[[i]]<-vals[2]
+}
+```
+
+Plotting histograms:
+
+```{r}
+hist(bootVals$boot_slope, main = "Bootstraped Slope Values", xlab = "Slope", breaks = 15)
+hist(bootVals$boot_intercept, main = "Bootstrapped Intercept Values", xlab = "Intercept", breaks = 15)
+```
+
+Getting standard errors:
+
+```{r}
+#getting bootstrap SEs
+slope_se<-sd(bootVals$boot_slope)
+intercept_se<-sd(bootVals$boot_intercept)
+SE<-data.frame(Slope = slope_se, Intercept = intercept_se, row.names = "SE")
+SE
+#getting SE fro original model
+summary(r)
+```
+The SE values from the bootstrap are similar to those from the lm() function, but
+not entirely the same.
+
+Getting CIs:
+
+```{r}
+#getting CIs from bootstrap
+slope_lower<-quantile(bootVals$boot_slope, (.05/2))
+slope_upper<-quantile(bootVals$boot_slope, (1-.05/2))
+intercept_lower<-quantile(bootVals$boot_intercept, (.05/2))
+intercept_upper<-quantile(bootVals$boot_intercept, (1-.05/2))
+
+CI<-data.frame(Lower = c(slope_lower, intercept_lower), Upper = c(slope_upper, intercept_upper), 
+               row.names = c("Intercept", "Slope"))
+
+CI
+#getting CIs from original model
+confint(r, level=.95)
+```
+Values are again very similar, but not exactly the same. Values are more similar for CIs than SEs.
+
+## Challenge 3
+
+Creating the function:
+
+```{r}
+boot_lm<-function (d, model, conf.level=0.95, reps=1000){
+  df<-data.frame(coefficients = c(0,0), SE = c(0,0), lowerCI = c(0,0), upperCI = c(0,0),
+        bootcoeff = c(mean(bootVals[,2]), mean(bootVals[,1])), bootSE = c(0,0),
+        bootlowerCI = c(0,0), bootupperCI = c(0,0), row.names=c("Intercept", "Slope"))
+  r<-lm(model, data=d)
+  tidyr<-tidy(r)
+  df$coefficients[1]<-tidyr[1,2]
+  df$coefficients[2]<-tidyr[2,2]
+  df$SE[1]<-tidyr[1,3]
+  df$SE[2]<-tidyr[2,3]
+  CI<-confint(r, level=conf.level)
+  df$lowerCI[1]<-CI[1,1]
+  df$lowerCI[2]<-CI[2,1]
+  df$upperCI[1]<-CI[1,2]
+  df$upperCI[2]<-CI[2,2]
+  set.seed(1)
+  bootVals<-data.frame(boot_slope = 1:1000, boot_intercept = 1:1000)
+  for (i in 1:reps){
+    s<-sample_n(d, size=nrow(d), replace=T)
+    bootr<-lm(model, data=s)
+    vals<-bootr$coefficients
+    bootVals$boot_slope[[i]]<-vals[1]
+    bootVals$boot_intercept[[i]]<-vals[2]}
+  slope_se<-sd(bootVals$boot_slope)
+  intercept_se<-sd(bootVals$boot_intercept)
+  df$bootSE[1]<-intercept_se
+  df$bootSE[2]<-slope_se
+  slope_lower<-quantile(bootVals$boot_slope, ((1-conf.level)/2))
+  slope_upper<-quantile(bootVals$boot_slope, (1-(1-conf.level)/2))
+  intercept_lower<-quantile(bootVals$boot_intercept, ((1-conf.level)/2))
+  intercept_upper<-quantile(bootVals$boot_intercept, (1-(1-conf.level)/2))
+  df$bootlowerCI[1]<-intercept_lower
+  df$bootlowerCI[2]<-slope_lower
+  df$bootupperCI[1]<-intercept_upper
+  df$bootupperCI[2]<-slope_upper
+  return(df)
+ 
+}
+```
+
+Running the function on three linear models:
+
+```{r}
+boot_lm(d=d, model=log(MeanGroupSize) ~ log(Body_mass_female_mean))
+boot_lm(d=d, model=log(DayLength_km) ~ log(Body_mass_female_mean))
+boot_lm(d=d, model=log(DayLength_km) ~ log(Body_mass_female_mean) + log(MeanGroupSize))
+```
+
